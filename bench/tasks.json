@@ -1,0 +1,42 @@
+[
+  {
+    "url": "https://en.wikipedia.org/wiki/Minecraft",
+    "request": "Show an estimated reading time at the top of the article"
+  },
+  {
+    "url": "https://en.wikipedia.org/wiki/Minecraft",
+    "request": "Make the article text larger and easier to read"
+  },
+  {
+    "url": "https://github.com/torvalds/linux",
+    "request": "Add a button next to the repository name that copies the clone address"
+  },
+  {
+    "url": "https://github.com/torvalds/linux",
+    "request": "Make the file and folder names in the file list bold"
+  },
+  {
+    "url": "https://github.com/torvalds/linux",
+    "request": "Hide the About sidebar on the right"
+  },
+  {
+    "url": "https://www.youtube.com",
+    "request": "Hide Shorts from the home page"
+  },
+  {
+    "url": "https://www.youtube.com/watch?v=jNQXAC9IVRw",
+    "request": "Hide the comments under the video"
+  },
+  {
+    "url": "https://www.youtube.com/watch?v=jNQXAC9IVRw",
+    "request": "Add a button under the video title that copies a link to the current time"
+  },
+  {
+    "url": "https://www.google.com/search?q=how+to+boil+an+egg",
+    "request": "Hide the People also ask box"
+  },
+  {
+    "url": "https://www.google.com",
+    "request": "Hide the links at the bottom of the page"
+  }
+]

@@ -1,0 +1,633 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Tweak</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="vendor/codemirror.css">
+<script src="vendor/codemirror.js"></script>
+<script src="vendor/mode-css.js"></script>
+<script src="vendor/mode-javascript.js"></script>
+<style>
+:root{
+  --bg:#1A1A1A; --rail:#161616; --panel:#1C1C1C; --line:#262626; --raised:#202020; --edge:#2E2E2E;
+  --ink:#D6D6D6; --soft:#8C8C8C; --faint:#6E6E6E; --dim:#4E4E4E;
+  --good:#7FB89C; --good-ink:#CFE6DA; --good-bg:#131B17; --good-line:#2F4A3E;
+  --warn:#C08A3E; --bad:#C77B76;
+  --font:"Geist",system-ui,-apple-system,"Segoe UI",sans-serif; --mono:"Geist Mono",ui-monospace,Consolas,monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);overflow:hidden}
+body{font:13px/1.55 var(--font);-webkit-font-smoothing:antialiased;display:flex;flex-direction:column}
+button,input,textarea,select{font:inherit;color:inherit}
+:focus-visible{outline:1.5px solid var(--soft);outline-offset:1px}
+[hidden]{display:none!important}
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-thumb{background:#2E2E2E;border-radius:6px;border:3px solid transparent;background-clip:content-box}
+
+/* shell */
+.shell{flex:1;display:flex;min-height:0}
+.rail{width:48px;flex:none;background:var(--rail);border-right:1px solid var(--line);display:flex;flex-direction:column;align-items:center;padding:10px 0;gap:2px}
+.rail .mark{width:16px;height:16px;margin-bottom:14px}
+.ric{width:30px;height:30px;display:grid;place-items:center;background:none;border:0;border-radius:6px;cursor:pointer;color:var(--faint)}
+.ric:hover{color:var(--ink);background:#242424}
+.ric.on{color:var(--ink);background:#242424}
+.ric svg{width:16px;height:16px}
+.grow{flex:1}
+
+.side{width:228px;flex:none;background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
+.sh{height:34px;flex:none;display:flex;align-items:center;gap:7px;padding:0 12px;color:var(--soft);font-size:11.5px}
+.sh svg{width:11px;height:11px}
+.slist{padding:0 8px;display:flex;flex-direction:column;gap:1px;overflow:auto}
+.sitem{display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:5px;color:var(--soft);cursor:pointer;border:0;background:none;text-align:left;width:100%;font-family:var(--mono);font-size:11.5px}
+.sitem:hover{background:#242424;color:var(--ink)}
+.sitem.on{background:#2A2A2A;color:#E4E4E4}
+.sitem .dot{width:5px;height:5px;border-radius:50%;flex:none}
+.sitem.plain{font-family:var(--font);font-size:12px}
+.newbtn{margin:10px;font-size:12px;color:var(--soft);background:none;border:1px solid var(--edge);border-radius:6px;padding:6px 10px;cursor:pointer;text-align:left}
+.newbtn:hover{color:var(--ink);border-color:var(--soft)}
+
+.main{flex:1;min-width:0;display:flex;flex-direction:column;min-height:0}
+.tabs{height:34px;flex:none;display:flex;align-items:stretch;background:var(--panel);border-bottom:1px solid var(--line)}
+.tab{display:flex;align-items:center;gap:8px;padding:0 14px;border:0;border-right:1px solid var(--line);background:none;color:var(--soft);font-family:var(--mono);font-size:11.5px;cursor:pointer}
+.tab.on{background:var(--bg);color:#E4E4E4}
+.tab .dirty{width:6px;height:6px;border-radius:50%;background:var(--faint);visibility:hidden}
+.tab.edited .dirty{visibility:visible}
+.pane{flex:1;min-height:0;overflow:auto;position:relative}
+.shots{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line);height:100%;align-content:start}
+.shots figure{margin:0;background:var(--bg);display:flex;flex-direction:column;min-height:0}
+.shots img{width:100%;display:block;object-fit:contain;background:#141414}
+.shots figcaption{font-size:11px;color:var(--soft);padding:6px 12px;font-family:var(--mono)}
+.empty{height:100%;display:grid;place-items:center;color:var(--faint);text-align:center;padding:40px}
+.empty .in{max-width:44ch;display:flex;flex-direction:column;gap:14px;align-items:center}
+.empty .mark{width:34px;height:34px}
+.empty h1{font-size:1.4rem;font-weight:500;color:var(--ink);margin:0;letter-spacing:-.01em}
+.ideas{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin-top:4px}
+.idea{border:1px solid var(--edge);background:none;border-radius:999px;padding:5px 12px;font-size:12px;color:var(--soft);cursor:pointer}
+.idea:hover{color:var(--ink);border-color:var(--soft)}
+.setup{height:100%;display:grid;place-items:center;padding:40px}
+.setup .card{width:min(520px,100%);display:flex;flex-direction:column;gap:16px}
+.setup h1{font-size:1.35rem;font-weight:500;margin:0;color:var(--ink);letter-spacing:-.01em}
+.step{display:flex;gap:12px;align-items:flex-start;padding:14px;border:1px solid var(--line);border-radius:10px;background:var(--panel)}
+.step.done{border-color:var(--good-line);background:var(--good-bg)}
+.step .num{width:22px;height:22px;flex:none;border-radius:50%;border:1px solid var(--edge);display:grid;place-items:center;font-size:11px;color:var(--soft);font-family:var(--mono)}
+.step.done .num{border-color:var(--good);color:var(--good)}
+.step .body{flex:1;min-width:0;display:flex;flex-direction:column;gap:8px}
+.step b{font-weight:500;font-size:13px}
+.step p{margin:0;font-size:12px;color:var(--faint);line-height:1.6}
+.bar{height:6px;border-radius:4px;background:#2A2A2A;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--good);width:0%;transition:width .3s}
+.CodeMirror{height:100%;background:var(--bg);color:var(--ink);font-family:var(--mono);font-size:12.5px;line-height:1.75}
+.CodeMirror-gutters{background:var(--bg);border-right:1px solid var(--line)}
+.CodeMirror-linenumber{color:var(--dim)}
+.CodeMirror-cursor{border-left:1.5px solid var(--ink)}
+.CodeMirror-selected{background:#2C3A44!important}
+.cm-s-default .cm-property,.cm-s-default .cm-attribute,.cm-s-default .cm-def,.cm-s-default .cm-variable-2{color:#9CDCFE}
+.cm-s-default .cm-keyword,.cm-s-default .cm-tag{color:#C586C0}
+.cm-s-default .cm-string,.cm-s-default .cm-string-2{color:#CE9178}
+.cm-s-default .cm-number,.cm-s-default .cm-atom{color:#B5CEA8}
+.cm-s-default .cm-comment{color:#6A9955}
+.edbar{flex:none;display:flex;align-items:center;gap:10px;padding:8px 12px;border-top:1px solid var(--line);background:var(--panel)}
+
+.chat{width:360px;flex:none;background:var(--panel);border-left:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
+.ch{height:34px;flex:none;display:flex;align-items:center;gap:8px;padding:0 10px;border-bottom:1px solid var(--line);color:var(--soft);font-size:11.5px}
+.seg{display:flex;align-items:center;gap:2px;background:var(--raised);border:1px solid var(--edge);border-radius:7px;padding:2px}
+.seg button{font-size:11px;color:var(--soft);background:none;border:0;border-radius:5px;padding:3px 9px;cursor:pointer}
+.seg button.on{color:#1A1A1A;background:var(--ink)}
+.stream{flex:1;overflow:auto;padding:14px;display:flex;flex-direction:column;gap:12px}
+.me{align-self:flex-end;max-width:88%;background:#242424;border-radius:10px;padding:8px 12px;font-size:12.5px;white-space:pre-wrap}
+.me .site{display:block;font-family:var(--mono);font-size:10.5px;color:var(--faint);margin-top:3px}
+.who{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:11px;color:var(--faint)}
+.who svg{width:13px;height:13px}
+.steps{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:3px}
+.steps li{display:flex;align-items:center;gap:9px;color:var(--faint);font-size:12px}
+.steps li::before{content:"";width:5px;height:5px;border-radius:50%;background:var(--edge);flex:none}
+.steps li.now{color:var(--ink)}
+.steps li.now::before{background:var(--ink)}
+.note{font-size:11.5px;color:var(--soft);background:#212121;border-radius:8px;padding:8px 10px;line-height:1.55}
+.proof{border:1px solid var(--good-line);background:var(--good-bg);border-radius:10px;padding:12px}
+.proof h3{margin:0;font-size:12.5px;font-weight:600;color:var(--good-ink);display:flex;align-items:center;gap:8px}
+.proof h3 svg{width:14px;height:14px}
+.proof .rows{display:flex;flex-direction:column;gap:5px;margin-top:9px;font-size:12px;color:#A9C4B6;line-height:1.5}
+.proof .from{margin-top:9px;font-family:var(--mono);font-size:10.5px;color:#6E8A7C}
+.proof.bad{border-color:#4A2F2E;background:#1B1313}
+.proof.bad h3{color:#E2B3AF}
+.proof.bad .rows{color:#C39B98}
+.proof.warn{border-color:#4A3F2E;background:#1B1813}
+.proof.warn h3{color:#E2CBAF}
+.proof.warn .rows{color:#C3B198}
+.acts{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.keep{font-size:12.5px;font-weight:500;color:#12201A;background:var(--good);border:0;border-radius:7px;padding:7px 16px;cursor:pointer}
+.keep:disabled{opacity:.5;cursor:default}
+.ghost{font-size:12px;color:var(--soft);background:none;border:1px solid var(--edge);border-radius:7px;padding:7px 12px;cursor:pointer}
+.ghost:hover{color:var(--ink);border-color:var(--soft)}
+.link{background:none;border:0;padding:0;color:var(--soft);font-size:12px;text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+.kept{font-size:11.5px;color:var(--soft);line-height:1.6}
+.kept code{font-family:var(--mono);font-size:10.5px;color:var(--faint);word-break:break-all}
+.kept ol{margin:5px 0 0;padding-left:1.1em}
+
+.composer{flex:none;border-top:1px solid var(--line);padding:10px}
+.cbox{background:var(--raised);border:1px solid var(--edge);border-radius:9px;padding:8px 10px;display:flex;flex-direction:column;gap:8px}
+.cbox:focus-within{border-color:var(--soft)}
+.cbox .where{display:flex;align-items:center;gap:7px;border-bottom:1px solid var(--line);padding-bottom:6px}
+.cbox .where svg{width:13px;height:13px;color:var(--faint);flex:none}
+.cbox input[type=url]{flex:1;min-width:0;background:none;border:0;outline:none;font-family:var(--mono);font-size:11.5px;color:var(--ink)}
+.cbox textarea{background:none;border:0;outline:none;resize:none;min-height:34px;max-height:150px;font-size:12.5px;color:var(--ink)}
+::placeholder{color:var(--dim)}
+.crow{display:flex;align-items:center;gap:6px}
+.cic{width:26px;height:26px;display:grid;place-items:center;background:none;border:0;border-radius:6px;color:var(--faint);cursor:pointer}
+.cic:hover{color:var(--ink);background:#282828}
+.cic svg{width:14px;height:14px}
+.send{width:28px;height:28px;border-radius:7px;border:0;background:var(--ink);color:#1A1A1A;display:grid;place-items:center;cursor:pointer}
+.send:disabled{opacity:.3;cursor:default}
+.send svg{width:14px;height:14px}
+.modelpick{background:none;border:0;color:var(--faint);font-family:var(--mono);font-size:11px;cursor:pointer;max-width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.modelpick:hover{color:var(--ink)}
+
+.status{height:26px;flex:none;background:var(--rail);border-top:1px solid var(--line);display:flex;align-items:center;gap:16px;padding:0 12px;font-family:var(--mono);font-size:11px;color:var(--faint)}
+.status .dot{width:5px;height:5px;border-radius:50%;background:var(--good);display:inline-block;margin-right:6px}
+.status .item{display:flex;align-items:center}
+.status .ok{color:var(--good)}
+.status .err{color:var(--bad)}
+
+/* simple mode hides the workbench furniture */
+body.simple .rail,body.simple .side,body.simple .tabs,body.simple .status{display:none}
+body.simple .chat{width:400px}
+body.simple .steps,body.simple .who{display:none}
+
+dialog{border:0;border-radius:12px;padding:0;width:min(560px,calc(100vw - 40px));max-height:82vh;background:var(--panel);color:var(--ink);box-shadow:0 30px 80px rgba(0,0,0,.5)}
+dialog::backdrop{background:rgba(0,0,0,.45)}
+.dh{display:flex;justify-content:space-between;align-items:center;padding:14px 16px;border-bottom:1px solid var(--line)}
+.dh h2{margin:0;font-size:14px;font-weight:600}
+.db{padding:14px 16px;overflow:auto;max-height:calc(82vh - 56px);display:flex;flex-direction:column;gap:10px}
+.db label{font-size:11.5px;color:var(--soft)}
+.db input[type=text],.db input[type=password],.db select{width:100%;background:var(--bg);border:1px solid var(--edge);border-radius:7px;padding:8px 10px;font-size:12.5px}
+.db input[type=password],.db input[type=text]{font-family:var(--mono);font-size:11.5px}
+.hint{font-size:11.5px;color:var(--faint);line-height:1.6;margin:0}
+.titem{border-top:1px solid var(--line);padding:9px 0;font-size:12.5px}
+.titem .m{color:var(--soft);font-size:11.5px}
+.titem code{font-family:var(--mono);font-size:10.5px;color:var(--faint);word-break:break-all}
+</style>
+</head>
+<body>
+
+<div class="shell">
+  <div class="rail">
+    <svg class="mark" viewBox="-50 -50 100 100" aria-hidden="true"></svg>
+    <button class="ric on" id="railNew" type="button" title="New tweak" aria-label="New tweak"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3zM12 12l8-4.5M12 12v9M12 12L4 7.5"/></svg></button>
+    <button class="ric" id="railTweaks" type="button" title="Your tweaks" aria-label="Your tweaks"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 4l9 4-9 4-9-4 9-4zM3 13l9 4 9-4"/></svg></button>
+    <button class="ric" id="railBrowser" type="button" title="Open test browser" aria-label="Open test browser"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18"/></svg></button>
+    <div class="grow"></div>
+    <button class="ric" id="railSettings" type="button" title="Settings" aria-label="Settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="3"/><path d="M12 3.4v2.3M12 18.3v2.3M4.8 12H2.5M21.5 12h-2.3M6.7 6.7L5.1 5.1M18.9 18.9l-1.6-1.6M17.3 6.7l1.6-1.6M5.1 18.9l1.6-1.6"/></svg></button>
+  </div>
+
+  <div class="side">
+    <div class="sh"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M9 6l6 6-6 6"/></svg><span id="sideTitle">this tweak</span></div>
+    <div class="slist" id="fileList"></div>
+    <div class="sh" style="padding-top:14px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M9 6l6 6-6 6"/></svg>kept</div>
+    <div class="slist" id="keptList"></div>
+    <div class="grow"></div>
+    <button class="newbtn" id="newBtn" type="button">New tweak</button>
+  </div>
+
+  <div class="main">
+    <div class="tabs" id="tabs"></div>
+    <div class="pane" id="pane">
+      <div class="empty" id="empty">
+        <div class="in">
+          <svg class="mark" viewBox="-50 -50 100 100" aria-hidden="true"></svg>
+          <h1>What do you want to change?</h1>
+          <p class="hint">Say it on the right. It gets built, tested on the real page, and you decide whether to keep it.</p>
+          <div class="ideas" id="ideas"></div>
+        </div>
+      </div>
+    </div>
+    <div class="edbar" id="edbar" hidden>
+      <button class="ghost" id="retest" type="button">Test my changes</button>
+      <button class="link" id="revert" type="button" disabled>Undo my edits</button>
+      <span class="hint" id="edMsg"></span>
+    </div>
+  </div>
+
+  <div class="chat">
+    <div class="ch">
+      <div class="seg"><button type="button" id="modeSimple">Simple</button><button type="button" id="modeFull" class="on">Full</button></div>
+      <div class="grow"></div>
+      <button class="cic" id="chatNew" type="button" title="New tweak" aria-label="New tweak"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 5v14M5 12h14"/></svg></button>
+    </div>
+    <div class="stream" id="stream" aria-live="polite"></div>
+    <div class="composer">
+      <div class="cbox">
+        <label class="where"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18"/></svg>
+          <input id="url" type="url" placeholder="https://www.youtube.com" spellcheck="false" autocomplete="off" aria-label="Web address"></label>
+        <textarea id="request" rows="2" placeholder="Hide Shorts from the home page" aria-label="What to change"></textarea>
+        <div class="crow">
+          <label class="cic" title="Watch the test" style="position:relative"><input type="checkbox" id="watch" style="position:absolute;opacity:0;width:0;height:0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg></label>
+          <div class="grow"></div>
+          <button class="modelpick" id="modelPick" type="button">choose a model</button>
+          <button class="send" id="go" type="button" aria-label="Make it" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M6 11l6-6 6 6"/></svg></button>
+        </div>
+      </div>
+      <p class="hint" id="notice" role="status" style="margin-top:8px"></p>
+    </div>
+  </div>
+</div>
+
+<div class="status">
+  <span class="item" id="stModel"><span class="dot"></span>no model</span>
+  <span class="item" id="stTarget"></span>
+  <span class="item" id="stTest"></span>
+  <div class="grow"></div>
+  <span class="item" id="stExtra"></span>
+</div>
+
+<dialog id="modelDlg"><div class="dh"><h2>Model</h2><button class="link" id="closeModel" type="button">Close</button></div>
+  <div class="db"><label for="model">Which model writes the change</label><select id="model"></select>
+  <p class="hint" id="modelHint"></p></div></dialog>
+
+<dialog id="setDlg"><div class="dh"><h2>Settings</h2><button class="link" id="closeSet" type="button">Close</button></div>
+  <div class="db">
+    <p class="hint">Tweak uses models on your own computer, free and private. If a change is too hard for them, a bigger model online can take over. That part is optional and uses your own account.</p>
+    <label for="hfToken">Hugging Face token</label>
+    <input id="hfToken" type="password" placeholder="hf_..." autocomplete="off" spellcheck="false">
+    <p class="hint">Make one at huggingface.co, under Settings then Access Tokens. Saved on this computer only.</p>
+    <label for="fallbackModel">Bigger model to fall back on</label>
+    <select id="fallbackModel"><option value="">None, stay on my computer</option></select>
+    <label>The Tweak bar in Chrome</label>
+    <p class="hint">Press a shortcut on any page, say what to change, watch it happen. Add it once: open <code>chrome://extensions</code>, turn on Developer mode, click Load unpacked, and choose the folder below. Then press <b>Alt + Shift + T</b> on any page, or click the Tweak bar icon in Chrome's toolbar. Pages that were already open need a refresh first.</p>
+    <input id="barPath" type="text" readonly>
+    <label for="ollamaHost">Where your local models run</label>
+    <input id="ollamaHost" type="text" placeholder="http://127.0.0.1:11434" spellcheck="false">
+    <div class="acts" style="margin-top:6px"><button class="keep" id="saveSet" type="button">Save</button><span class="hint" id="setMsg"></span></div>
+    <p class="hint" id="homeLine"></p>
+  </div></dialog>
+
+<dialog id="tweaksDlg"><div class="dh"><h2>Your tweaks</h2><button class="link" id="closeTweaks" type="button">Close</button></div>
+  <div class="db" id="tweaksList"></div></dialog>
+
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const store = { get(k, d) { try { return JSON.parse(localStorage.getItem('tweak.' + k)) ?? d; } catch { return d; } }, set(k, v) { try { localStorage.setItem('tweak.' + k, JSON.stringify(v)); } catch {} } };
+
+function drawMark(svg) {
+  const R = 34, pts = [[0, 0]];
+  for (let k = 0; k < 6; k++) { const a = (-90 + 60 * k) * Math.PI / 180; pts.push([R * Math.cos(a), R * Math.sin(a)]); }
+  const hex = pts.slice(1).map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join(' ') + 'Z';
+  const spokes = [2, 4, 6].map(i => `M0 0L${pts[i][0].toFixed(1)} ${pts[i][1].toFixed(1)}`).join('');
+  svg.innerHTML = `<path d="${hex}" fill="none" stroke="#5A5A5A" stroke-width="2"/><path d="${spokes}" fill="none" stroke="#5A5A5A" stroke-width="2"/>` + pts.map((p, i) => `<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="${i ? 5.2 : 6}" fill="#D6D6D6"/>`).join('');
+}
+document.querySelectorAll('svg.mark').forEach(drawMark);
+const MINI = () => `<svg viewBox="-50 -50 100 100" aria-hidden="true"><circle cx="0" cy="0" r="7" fill="#6E6E6E"/><circle cx="0" cy="-34" r="6" fill="#6E6E6E"/><circle cx="29.4" cy="-17" r="6" fill="#6E6E6E"/><circle cx="29.4" cy="17" r="6" fill="#6E6E6E"/><circle cx="0" cy="34" r="6" fill="#6E6E6E"/><circle cx="-29.4" cy="17" r="6" fill="#6E6E6E"/><circle cx="-29.4" cy="-17" r="6" fill="#6E6E6E"/></svg>`;
+
+const IDEAS = [
+  ['https://www.youtube.com', 'Hide Shorts from the home page'],
+  ['https://en.wikipedia.org/wiki/Minecraft', 'Make the article text larger and easier to read'],
+  ['https://github.com/torvalds/linux', 'Hide the About sidebar on the right']
+];
+IDEAS.forEach(([u, r]) => {
+  const b = document.createElement('button'); b.type = 'button'; b.className = 'idea'; b.textContent = r;
+  b.onclick = () => { $('url').value = u; $('request').value = r; sync(); $('request').focus(); };
+  $('ideas').append(b);
+});
+
+let status = null, run = null, editors = {}, files = [], activeTab = 'preview';
+
+/* ---------- mode ---------- */
+function setMode(simple) {
+  document.body.classList.toggle('simple', simple);
+  $('modeSimple').classList.toggle('on', simple);
+  $('modeFull').classList.toggle('on', !simple);
+  store.set('simple', simple);
+  Object.values(editors).forEach(e => e.cm && e.cm.refresh());
+}
+$('modeSimple').onclick = () => setMode(true);
+$('modeFull').onclick = () => setMode(false);
+setMode(store.get('simple', false));
+
+/* ---------- status ---------- */
+function say(msg, err) { $('notice').innerHTML = msg || ''; $('notice').style.color = err ? 'var(--bad)' : 'var(--faint)'; }
+function sync() {
+  const ok = $('url').value.trim() && $('request').value.trim() && $('model').value && status && !status.busy && !run;
+  $('go').disabled = !ok;
+}
+['url', 'request'].forEach(id => $(id).addEventListener('input', sync));
+$('request').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); if (!$('go').disabled) $('go').click(); } });
+$('watch').checked = store.get('watch', false);
+$('watch').onchange = () => store.set('watch', $('watch').checked);
+
+async function loadStatus() {
+  try { status = await (await fetch('/api/status')).json(); }
+  catch { say('Cannot reach the Tweak service.', true); return; }
+  const sel = $('model'), saved = store.get('model', '');
+  sel.innerHTML = '';
+  const add = (v, l) => { const o = document.createElement('option'); o.value = v; o.textContent = l; sel.append(o); };
+  status.models.ollama.models.forEach(m => add('ollama:' + m, m + '  (this computer)'));
+  status.models.api.models.slice(0, 200).forEach(m => add('api:' + m, m + '  (online)'));
+  if (!sel.options.length) add('', 'no models found');
+  if ([...sel.options].some(o => o.value === saved)) sel.value = saved;
+  sel.onchange = () => { store.set('model', sel.value); paintStatus(); sync(); };
+  const problems = [];
+  const settingUp = !!document.querySelector('.setup');
+  if (!settingUp && !status.models.ollama.reachable && !status.models.api.reachable) problems.push('Ollama is not running. Start it, and this page will notice.');
+  else if (!settingUp && !sel.value) problems.push('No model yet. Use the steps in the middle to get one.');
+  $('modelHint').innerHTML = status.fallback ? 'If this model fails twice, ' + esc(status.fallback.replace(/^(ollama|api):/, '')) + ' takes over.' : 'Set a bigger model in Settings to rescue the hard ones.';
+  say(problems.join(' '), problems.length > 0);
+  paintStatus(); sync(); loadKept();
+}
+
+function paintStatus() {
+  const m = $('model').value;
+  const local = m.startsWith('ollama:');
+  $('stModel').innerHTML = m ? `<span class="dot" style="background:${local ? 'var(--good)' : 'var(--warn)'}"></span>${esc(m.replace(/^(ollama|api):/, ''))}, ${local ? 'on this computer' : 'online'}` : '<span class="dot" style="background:var(--dim)"></span>no model';
+  $('modelPick').textContent = m ? m.replace(/^(ollama|api):/, '') : 'choose a model';
+  const u = $('url').value.trim();
+  $('stTarget').textContent = u ? u.replace(/^https?:\/\//, '').split('/')[0] : '';
+  $('stExtra').textContent = status && status.keepDir ? 'kept in ' + status.keepDir : '';
+}
+$('url').addEventListener('input', paintStatus);
+$('modelPick').onclick = () => $('modelDlg').showModal();
+$('closeModel').onclick = () => $('modelDlg').close();
+
+async function loadKept() {
+  try {
+    const d = await (await fetch('/api/tweaks')).json();
+    $('keptList').innerHTML = d.tweaks.length ? d.tweaks.map(t => `<button class="sitem plain" type="button" title="${esc(t.folder)}"><span class="dot" style="background:${t.verdict === 'works' ? 'var(--good)' : 'var(--warn)'}"></span>${esc(t.name)}</button>`).join('') : '<div class="sitem plain" style="color:var(--dim)">nothing kept yet</div>';
+  } catch {}
+}
+
+/* ---------- settings ---------- */
+$('railSettings').onclick = async () => {
+  const d = await (await fetch('/api/settings')).json();
+  $('hfToken').value = ''; $('hfToken').placeholder = d.hasToken ? 'saved, type a new one to replace it' : 'hf_...';
+  $('ollamaHost').value = d.ollamaHost || '';
+  const sel = $('fallbackModel');
+  sel.innerHTML = '<option value="">None, stay on my computer</option>';
+  (status && status.models.api.models ? status.models.api.models : []).slice(0, 200).forEach(m => { const o = document.createElement('option'); o.value = 'api:' + m; o.textContent = m; sel.append(o); });
+  if (d.fallbackModel && ![...sel.options].some(o => o.value === d.fallbackModel)) { const o = document.createElement('option'); o.value = d.fallbackModel; o.textContent = d.fallbackModel.replace(/^api:/, ''); sel.append(o); }
+  sel.value = d.fallbackModel || '';
+  $('homeLine').textContent = 'Your tweaks and records are kept in ' + d.home;
+  $('barPath').value = d.home + '\\chrome-bar';
+  $('setMsg').textContent = (status && status.models.api.models.length) ? '' : 'Save a token, then reopen this to choose a model.';
+  $('setDlg').showModal();
+};
+$('closeSet').onclick = () => $('setDlg').close();
+$('saveSet').onclick = async () => {
+  const body = { fallbackModel: $('fallbackModel').value, ollamaHost: $('ollamaHost').value };
+  if ($('hfToken').value.trim()) body.hfToken = $('hfToken').value.trim();
+  $('saveSet').disabled = true; $('setMsg').textContent = 'Saving...';
+  const r = await fetch('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  $('saveSet').disabled = false; $('setMsg').textContent = r.ok ? 'Saved.' : 'Could not save.';
+  $('hfToken').value = '';
+  await loadStatus();
+};
+
+$('railTweaks').onclick = async () => {
+  const d = await (await fetch('/api/tweaks')).json();
+  $('tweaksList').innerHTML = d.tweaks.length ? d.tweaks.map(t => `<div class="titem"><b>${esc(t.name)}</b><div class="m">${esc(t.summary || t.request)}</div><div class="m">${esc(t.url)}</div><code>${esc(t.folder)}</code></div>`).join('') : '<p class="hint">Nothing kept yet.</p>';
+  $('tweaksDlg').showModal();
+};
+$('closeTweaks').onclick = () => $('tweaksDlg').close();
+
+$('railBrowser').onclick = async () => {
+  const r = await fetch('/api/browser', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: $('url').value.trim() || 'https://www.youtube.com' }) });
+  const d = await r.json();
+  say(r.ok ? (d.alreadyOpen ? 'The test browser is already open.' : 'Test browser open. Accept cookie pages or sign in there, then close it.') : esc(d.error), !r.ok);
+  loadStatus();
+};
+
+/* ---------- tabs and panes ---------- */
+function setTabs(list, active) {
+  files = list;
+  activeTab = active || (list[0] && list[0].id) || 'preview';
+  $('tabs').innerHTML = list.map(f => `<button class="tab ${f.id === activeTab ? 'on' : ''}" type="button" data-id="${f.id}">${esc(f.label)}<span class="dirty"></span></button>`).join('');
+  $('tabs').querySelectorAll('.tab').forEach(t => t.onclick = () => showTab(t.dataset.id));
+  showTab(activeTab);
+}
+function showTab(id) {
+  activeTab = id;
+  $('tabs').querySelectorAll('.tab').forEach(t => t.classList.toggle('on', t.dataset.id === id));
+  const f = files.find(x => x.id === id);
+  $('pane').innerHTML = '';
+  $('edbar').hidden = !(f && f.kind === 'code');
+  if (!f) return;
+  if (f.kind === 'shots') { $('pane').innerHTML = f.html; return; }
+  const holder = document.createElement('div');
+  holder.style.height = '100%';
+  $('pane').append(holder);
+  if (typeof CodeMirror === 'undefined') { holder.innerHTML = '<p class="empty">The code editor could not load. It needs the internet the first time.</p>'; return; }
+  const existing = editors[f.id];
+  const cm = CodeMirror(holder, { value: existing ? existing.cm.getValue() : f.value, mode: f.mode, lineNumbers: true, lineWrapping: true, tabSize: 2 });
+  cm.setSize('100%', '100%');
+  editors[f.id] = { cm, original: f.value };
+  cm.on('change', () => {
+    const tab = $('tabs').querySelector(`.tab[data-id="${f.id}"]`);
+    if (tab) tab.classList.toggle('edited', cm.getValue() !== editors[f.id].original);
+    $('revert').disabled = !Object.values(editors).some(e => e.cm.getValue() !== e.original);
+  });
+  setTimeout(() => cm.refresh(), 30);
+}
+
+/* ---------- running ---------- */
+$('go').onclick = async () => {
+  let url = $('url').value.trim();
+  if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
+  const request = $('request').value.trim(), model = $('model').value;
+  say('');
+  const r = await fetch('/api/run', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ request, url, model, headless: !$('watch').checked }) });
+  const d = await r.json();
+  if (!r.ok) { say(esc(d.error), true); return; }
+  startRun(d.runId, request, url, model);
+};
+$('railNew').onclick = $('newBtn').onclick = $('chatNew').onclick = () => reset();
+function reset() {
+  if (run) return;
+  $('stream').innerHTML = ''; $('request').value = ''; editors = {};
+  setTabs([], 'preview');
+  $('pane').innerHTML = '';
+  $('tabs').innerHTML = '';
+  $('edbar').hidden = true;
+  $('sideTitle').textContent = 'this tweak'; $('fileList').innerHTML = '';
+  $('pane').innerHTML = `<div class="empty"><div class="in"><svg class="mark" viewBox="-50 -50 100 100"></svg><h1>What do you want to change?</h1><p class="hint">Say it on the right. It gets built, tested on the real page, and you decide whether to keep it.</p></div></div>`;
+  drawMark($('pane').querySelector('svg.mark'));
+  $('stTest').textContent = '';
+  sync(); $('request').focus();
+}
+
+function startRun(runId, request, url, model) {
+  run = { runId, request, url, model, t0: Date.now() };
+  $('stream').innerHTML = `<div class="me">${esc(request)}<span class="site">${esc(url)}</span></div>
+    <div class="who">${MINI()}<span>${esc(model.replace(/^(ollama|api):/, ''))}</span><span id="timer">0s</span><button class="link" id="stop" type="button" style="margin-left:auto">stop</button></div>
+    <ul class="steps" id="steps"></ul><div id="result"></div>`;
+  $('stTest').innerHTML = '<span style="color:var(--soft)">testing...</span>';
+  const tick = setInterval(() => { const t = $('timer'); if (t) t.textContent = Math.floor((Date.now() - run.t0) / 1000) + 's'; }, 250);
+  $('stop').onclick = () => fetch(`/api/run/${runId}/stop`, { method: 'POST' });
+  sync();
+  const src = new EventSource(`/api/run/${runId}/events`);
+  src.onmessage = ev => {
+    const e = JSON.parse(ev.data);
+    if (e.type === 'step') {
+      $('steps').querySelectorAll('li').forEach(li => li.classList.remove('now'));
+      $('steps').insertAdjacentHTML('beforeend', `<li class="now">${esc(e.label)}</li>`);
+      $('stream').scrollTop = $('stream').scrollHeight;
+    }
+    if (e.type === 'attempt' && e.attempt.problem) {
+      const miss = e.attempt.missing && e.attempt.missing.length ? ` It looked for ${e.attempt.missing.slice(0, 2).map(x => '"' + x + '"').join(', ')}, which is not on this page.` : '';
+      $('steps').insertAdjacentHTML('beforeend', `<li style="color:var(--faint);padding-left:14px">${esc(e.attempt.problem + miss)}</li>`);
+    }
+    if (e.type === 'done') {
+      clearInterval(tick); src.close();
+      const t = $('timer'); if (t) t.textContent = ((e.at || Date.now() - run.t0) / 1000).toFixed(1) + 's';
+      const s = $('stop'); if (s) s.remove();
+      showResult(e.result);
+      run = null; loadStatus();
+    }
+  };
+}
+
+const WORD = { works: 'It worked', unproven: 'Not proven', fail: "It didn't work", stopped: 'Stopped' };
+function showResult(r) {
+  const n = r.best || (r.attempts.length ? r.attempts[r.attempts.length - 1].n : 0);
+  const a = r.attempts.find(x => x.n === n);
+  const proved = a && a.checks && a.checks.length;
+  const cls = r.status === 'works' ? '' : r.status === 'unproven' ? ' warn' : ' bad';
+  const rows = proved ? a.checks.map(c => {
+    const what = c.type === 'style' ? `${c.property} is ${c.value}` : c.type === 'hidden' ? `${c.selector} is hidden` : c.type === 'exists' ? `${c.selector} is there` : `${c.type} ${c.selector}`;
+    return `<div>${esc(what)} <span style="color:var(--faint)">(was ${c.before ? 'true' : 'false'}, now ${c.after ? 'true' : 'false'})</span></div>`;
+  }).join('') : `<div>${esc(r.reason)}</div>`;
+
+  $('result').innerHTML = `
+    <div class="proof${cls}">
+      <h3>${r.status === 'works' ? '<svg viewBox="0 0 24 24" fill="none" stroke="#7FB89C" stroke-width="2.4"><path d="M20 6L9 17l-5-5"/></svg>' : ''}${WORD[r.status] || r.status}</h3>
+      <div class="rows">${rows}</div>
+      ${a && a.checksFromCss ? '<div class="from">checks written from the css, not guessed</div>' : ''}
+    </div>
+    <div class="acts" style="margin-top:12px">
+      ${proved && r.status !== 'fail' ? '<button class="keep" id="keep" type="button">Keep it</button>' : ''}
+      <button class="ghost" id="again" type="button">Try again</button>
+      <button class="link" id="fresh" type="button">New tweak</button>
+    </div>
+    <div id="keptInfo" style="margin-top:10px"></div>`;
+
+  // side panel and tabs
+  const tabs = [];
+  if (r.id) {
+    const after = proved ? `<figure><img alt="With the tweak" src="/shots/${esc(r.id)}/after-${n}.jpg"><figcaption>with the tweak</figcaption></figure>` : '<figure><figcaption>no tweak was tested</figcaption></figure>';
+    tabs.push({ id: 'preview', label: 'preview', kind: 'shots', html: `<div class="shots"><figure><img alt="Before" src="/shots/${esc(r.id)}/before.jpg"><figcaption>before</figcaption></figure>${after}</div>` });
+  }
+  if (a && a.css) tabs.push({ id: 'css', label: 'content.css', kind: 'code', mode: 'css', value: a.css });
+  if (a && a.js) tabs.push({ id: 'js', label: 'content.js', kind: 'code', mode: 'javascript', value: a.js });
+  editors = {};
+  setTabs(tabs, 'preview');
+  $('sideTitle').textContent = a && a.name ? a.name.toLowerCase() : 'this tweak';
+  $('fileList').innerHTML = tabs.map(t => `<button class="sitem ${t.id === 'preview' ? 'on' : ''}" type="button" data-id="${t.id}">${esc(t.label)}</button>`).join('');
+  $('fileList').querySelectorAll('.sitem').forEach(b => b.onclick = () => {
+    $('fileList').querySelectorAll('.sitem').forEach(x => x.classList.toggle('on', x === b));
+    showTab(b.dataset.id);
+  });
+  $('stTest').innerHTML = r.status === 'works' ? '<span class="ok">test passed</span>' : r.status === 'unproven' ? '<span style="color:var(--warn)">not proven</span>' : '<span class="err">test failed</span>';
+
+  const runId = run ? run.runId : null, url = run ? run.url : '', request = run ? run.request : '';
+  if ($('keep')) $('keep').onclick = () => keepIt(runId, n, a.name);
+  $('again').onclick = () => { $('url').value = url; $('request').value = request; sync(); $('go').click(); };
+  $('fresh').onclick = reset;
+
+  $('retest').onclick = async () => {
+    const get = id => (editors[id] ? editors[id].cm.getValue() : (a && (id === 'css' ? a.css : a.js)) || '');
+    $('retest').disabled = true; $('edMsg').textContent = 'Testing your version on the real page...';
+    try {
+      const res = await fetch('/api/retest', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ runId, attempt: n, css: get('css'), js: get('js') }) });
+      const d = await res.json();
+      if (!res.ok) { $('edMsg').textContent = d.error; return; }
+      $('edMsg').textContent = { works: 'Works. Proved on the real page.', unproven: 'Checks passed, but they also passed without your change.', fail: 'Did not work. ' + (d.problem || '') }[d.verdict] || d.verdict;
+      if (d.verdict !== 'fail' && $('keep')) { $('keep').textContent = 'Keep your version'; $('keep').onclick = () => keepIt(runId, d.attempt, a.name); }
+    } catch { $('edMsg').textContent = 'The test could not run.'; }
+    finally { $('retest').disabled = false; }
+  };
+  $('revert').onclick = () => { Object.values(editors).forEach(e => e.cm.setValue(e.original)); $('tabs').querySelectorAll('.tab').forEach(t => t.classList.remove('edited')); $('revert').disabled = true; $('edMsg').textContent = 'Back to the version the model wrote.'; };
+}
+
+async function keepIt(runId, attempt, name) {
+  $('keep').disabled = true;
+  const res = await fetch('/api/keep', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ runId, attempt, name }) });
+  const d = await res.json();
+  if (!res.ok) { $('keptInfo').innerHTML = `<div class="kept" style="color:var(--bad)">${esc(d.error)}</div>`; $('keep').disabled = false; return; }
+  $('keep').textContent = 'Kept';
+  $('keptInfo').innerHTML = `<div class="kept">Saved to <code>${esc(d.folder)}</code><ol><li>Open <code>chrome://extensions</code> in Chrome.</li><li>Turn on Developer mode.</li><li>Load unpacked, choose that folder.</li></ol></div>`;
+  loadKept();
+}
+
+/* ---------- getting started ---------- */
+let setupTimer = null;
+async function checkSetup() {
+  let d;
+  try { d = await (await fetch('/api/setup')).json(); } catch { return false; }
+  const ready = d.ollamaRunning && d.models.length;
+  if (ready && !d.pulling) { if (setupTimer) { clearInterval(setupTimer); setupTimer = null; } return true; }
+  showSetup(d);
+  if (!setupTimer) setupTimer = setInterval(async () => { if (await checkSetup()) { await loadStatus(); reset(); } }, 2500);
+  return false;
+}
+
+function showSetup(d) {
+  const pulling = d.pulling;
+  $('tabs').innerHTML = '';
+  $('edbar').hidden = true;
+  $('pane').innerHTML = `
+    <div class="setup"><div class="card">
+      <h1>Two things and you are ready</h1>
+      <p class="hint">Tweak writes changes with a model that runs on this computer. It is free, private and yours. Ollama is the free program that runs it.</p>
+
+      <div class="step ${d.ollamaRunning ? 'done' : ''}">
+        <span class="num">${d.ollamaRunning ? '&#10003;' : '1'}</span>
+        <div class="body">
+          <b>${d.ollamaRunning ? 'Ollama is running' : 'Install Ollama'}</b>
+          <p>${d.ollamaRunning ? 'Found it on this computer.' : 'A free program that runs models locally. Install it, open it once, then come back here. This page notices by itself.'}</p>
+          ${d.ollamaRunning ? '' : '<div><button class="keep" id="getOllama" type="button">Open the download page</button></div>'}
+        </div>
+      </div>
+
+      <div class="step ${d.models.length ? 'done' : ''}">
+        <span class="num">${d.models.length ? '&#10003;' : '2'}</span>
+        <div class="body">
+          <b>${d.models.length ? 'A model is ready' : 'Get a model'}</b>
+          <p>${d.models.length ? d.models.slice(0, 3).join(', ') + ' on this computer.' : 'About 4.7 GB, downloaded once. ' + esc(d.recommended) + ' is the one that does best at this job.'}</p>
+          ${d.models.length ? '' : pulling
+            ? `<div class="bar"><i style="width:${pulling.percent || 2}%"></i></div><p id="pullMsg">${esc(pulling.status || 'starting')} ${pulling.percent || 0}%</p>`
+            : `<div><button class="keep" id="getModel" type="button" ${d.ollamaRunning ? '' : 'disabled'}>Download ${esc(d.recommended)}</button></div>`}
+        </div>
+      </div>
+
+      <p class="hint">Already have models? Anything in Ollama shows up here. A bigger model online is optional and set in Settings.</p>
+    </div></div>`;
+  if ($('getOllama')) $('getOllama').onclick = () => fetch('/api/open-link', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: d.downloadPage }) });
+  if ($('getModel')) $('getModel').onclick = async () => {
+    $('getModel').disabled = true; $('getModel').textContent = 'Starting...';
+    await fetch('/api/pull', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model: d.recommended }) });
+    watchPull();
+  };
+  if (pulling) watchPull();
+}
+
+let pullWatch = null;
+function watchPull() {
+  if (pullWatch) return;
+  pullWatch = setInterval(async () => {
+    let p;
+    try { p = await (await fetch('/api/pull')).json(); } catch { return; }
+    const msg = $('pullMsg'), bar = document.querySelector('.bar i');
+    if (msg) msg.textContent = p.error ? 'Could not download it: ' + p.error : `${p.status || 'downloading'} ${p.percent || 0}%`;
+    if (bar) bar.style.width = (p.percent || 2) + '%';
+    if (p.done || p.error) { clearInterval(pullWatch); pullWatch = null; if (p.done) { await loadStatus(); if (await checkSetup()) reset(); } }
+  }, 1200);
+}
+
+(async () => {
+  await loadStatus();
+  if (await checkSetup()) reset();
+})();
+</script>
+</body>
+</html>

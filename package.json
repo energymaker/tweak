@@ -1,0 +1,75 @@
+{
+  "name": "tweak",
+  "version": "1.6.0",
+  "description": "Change the websites you use by describing it. Open models on your own computer write the change, a real browser tests it, you decide whether to keep it.",
+  "main": "main.cjs",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder",
+    "bench": "electron bench.cjs",
+    "dev": "electron ."
+  },
+  "devDependencies": {
+    "electron": "33.4.11",
+    "electron-builder": "25.1.8"
+  },
+  "build": {
+    "appId": "com.tweak.app",
+    "productName": "Tweak",
+    "files": [
+      "main.cjs",
+      "bench.cjs",
+      "app.mjs",
+      "server.js",
+      "bench.js",
+      "lib/**",
+      "public/**",
+      "bench/**",
+      "build/**",
+      "companion/**"
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "artifactName": "Tweak-Setup-${version}.${ext}",
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": false,
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "shortcutName": "Tweak"
+    },
+    "mac": {
+      "target": [
+        "dmg"
+      ],
+      "category": "public.app-category.developer-tools"
+    },
+    "linux": {
+      "target": [
+        "AppImage"
+      ],
+      "icon": "build/icon.png"
+    },
+    "directories": {
+      "buildResources": "build"
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "energymarker",
+        "repo": "tweak"
+      }
+    ]
+  },
+  "author": "Dru",
+  "dependencies": {
+    "electron-updater": "6.3.9"
+  }
+}
