@@ -4,7 +4,8 @@ import { createReadStream, existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { listModels } from './lib/model.js';
-import { runTweak, testCode, planTweak, keepPlanned, HOME, PROFILE, COOKIES, RUNS, LOG } from './lib/pipeline.js';
+import { runTweak, testCode, planTweak, keepPlanned, keepProject, HOME, PROFILE, COOKIES, RUNS, LOG } from './lib/pipeline.js';
+import { detect } from './lib/targets/minecraft.js';
 import { shell } from 'electron';
 import { launchTestBrowser, goto, loadCookies, saveCookies, sweepProfiles } from './lib/browser.js';
 
@@ -99,16 +100,17 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'POST' && url.pathname === '/api/run') {
       if (busy) return send(res, 409, { error: 'A tweak is already being made. Wait for it to finish.' });
       if (testBrowserIsOpen()) return send(res, 409, { error: 'Close the test browser window first.' });
-      const { request, url: target, model, headless = true } = await readBody(req);
+      const { request, url: target, model, headless = true, target: kind = 'web' } = await readBody(req);
       const fallback = process.env.TWEAK_FALLBACK_MODEL || '';
       if (!request || !target || !model) return send(res, 400, { error: 'Say what to change, where, and pick a model.' });
+      if (!['web', 'minecraft'].includes(kind)) return send(res, 400, { error: 'Tweak does not know how to change that kind of thing.' });
       const controller = new AbortController();
       const run = { events: [], listeners: new Set(), controller, result: null };
       const tempId = 'pending-' + Date.now();
       runs.set(tempId, run);
       busy = true;
       const push = ev => { run.events.push(ev); for (const l of run.listeners) l.write(`data: ${JSON.stringify(ev)}\n\n`); };
-      runTweak({ request, url: target, model, fallback, headless, signal: controller.signal, onEvent: push })
+      runTweak({ target: kind, request, url: target, model, fallback, headless, signal: controller.signal, onEvent: push })
         .then(r => { run.result = r; })
         .catch(e => push({ type: 'done', result: { status: 'fail', reason: 'Something broke inside the tool: ' + e.message, attempts: [] } }))
         .finally(() => { busy = false; });
@@ -211,6 +213,7 @@ const server = http.createServer(async (req, res) => {
       const run = runs.get(runId), r = run && run.result;
       const a = r && r.attempts.find(x => x.n === attempt);
       if (!a) return send(res, 400, { error: 'That tweak is no longer available.' });
+      if (r.target === 'minecraft') return send(res, 400, { error: 'Testing hand edits only works for website tweaks so far.' });
       busy = true;
       try {
         const n = Math.max(...r.attempts.map(x => x.n)) + 1;
@@ -223,10 +226,20 @@ const server = http.createServer(async (req, res) => {
       } finally { busy = false; }
     }
 
+    // What a mod project is, so the page can say it found the right one.
+    if (req.method === 'GET' && url.pathname === '/api/project') {
+      try { return send(res, 200, await detect(url.searchParams.get('dir'))); }
+      catch (e) { return send(res, 400, { error: e.message }); }
+    }
+
     if (req.method === 'POST' && url.pathname === '/api/keep') {
       const { runId, attempt, name } = await readBody(req);
       const run = runs.get(runId);
       const r = run && run.result;
+      if (r && r.target === 'minecraft') {
+        try { return send(res, 200, { folder: r.project, files: await keepProject(r, attempt) }); }
+        catch (e) { return send(res, 400, { error: e.message }); }
+      }
       const a = r && r.attempts.find(x => x.n === attempt);
       if (!a || !a.extDir) return send(res, 400, { error: 'That tweak is not available to keep.' });
       let folder = path.join(TWEAKS, slug(name || a.name));

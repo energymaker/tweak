@@ -133,7 +133,7 @@ button,input,textarea,select{font:inherit;color:inherit}
 .cbox:focus-within{border-color:var(--soft)}
 .cbox .where{display:flex;align-items:center;gap:7px;border-bottom:1px solid var(--line);padding-bottom:6px}
 .cbox .where svg{width:13px;height:13px;color:var(--faint);flex:none}
-.cbox input[type=url]{flex:1;min-width:0;background:none;border:0;outline:none;font-family:var(--mono);font-size:11.5px;color:var(--ink)}
+.cbox .where input{flex:1;min-width:0;background:none;border:0;outline:none;font-family:var(--mono);font-size:11.5px;color:var(--ink)}
 .cbox textarea{background:none;border:0;outline:none;resize:none;min-height:34px;max-height:150px;font-size:12.5px;color:var(--ink)}
 ::placeholder{color:var(--dim)}
 .crow{display:flex;align-items:center;gap:6px}
@@ -145,6 +145,8 @@ button,input,textarea,select{font:inherit;color:inherit}
 .send svg{width:14px;height:14px}
 .modelpick{background:none;border:0;color:var(--faint);font-family:var(--mono);font-size:11px;cursor:pointer;max-width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .modelpick:hover{color:var(--ink)}
+select.modelpick{appearance:none;padding:0}
+select.modelpick option{background:var(--bg,#111112);color:var(--ink)}
 
 .status{height:26px;flex:none;background:var(--rail);border-top:1px solid var(--line);display:flex;align-items:center;gap:16px;padding:0 12px;font-family:var(--mono);font-size:11px;color:var(--faint)}
 .status .dot{width:5px;height:5px;border-radius:50%;background:var(--good);display:inline-block;margin-right:6px}
@@ -226,6 +228,7 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
         <div class="crow">
           <label class="cic" title="Watch the test" style="position:relative"><input type="checkbox" id="watch" style="position:absolute;opacity:0;width:0;height:0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg></label>
           <div class="grow"></div>
+          <select class="modelpick" id="targetPick" aria-label="What to change"><option value="web">a website</option><option value="minecraft">a Minecraft mod</option></select>
           <button class="modelpick" id="modelPick" type="button">choose a model</button>
           <button class="send" id="go" type="button" aria-label="Make it" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M6 11l6-6 6 6"/></svg></button>
         </div>
@@ -344,12 +347,49 @@ function paintStatus() {
   $('stModel').innerHTML = m ? `<span class="dot" style="background:${local ? 'var(--good)' : 'var(--warn)'}"></span>${esc(m.replace(/^(ollama|api):/, ''))}, ${local ? 'on this computer' : 'online'}` : '<span class="dot" style="background:var(--dim)"></span>no model';
   $('modelPick').textContent = m ? m.replace(/^(ollama|api):/, '') : 'choose a model';
   const u = $('url').value.trim();
-  $('stTarget').textContent = u ? u.replace(/^https?:\/\//, '').split('/')[0] : '';
+  $('stTarget').textContent = !u ? '' : $('targetPick').value === 'web' ? u.replace(/^https?:\/\//, '').split('/')[0] : u.split(/[\\/]/).filter(Boolean).pop();
   $('stExtra').textContent = status && status.keepDir ? 'kept in ' + status.keepDir : '';
 }
 $('url').addEventListener('input', paintStatus);
 $('modelPick').onclick = () => $('modelDlg').showModal();
 $('closeModel').onclick = () => $('modelDlg').close();
+
+/* ---------- target: a website or a Minecraft mod ---------- */
+const TARGETS = {
+  web: { placeholder: 'https://www.youtube.com', label: 'Web address', ask: 'Hide Shorts from the home page' },
+  minecraft: { placeholder: 'C:\\Orbit\\mc-bot', label: 'Mod project folder', ask: 'Add an item that appears in the creative menu' }
+};
+let projectTimer = null;
+function setTarget(t, keepValue) {
+  const prev = $('targetPick').dataset.was;
+  if (prev && !keepValue) store.set('where.' + prev, $('url').value.trim());
+  $('targetPick').value = t; $('targetPick').dataset.was = t;
+  store.set('target', t);
+  const c = TARGETS[t];
+  $('url').type = t === 'web' ? 'url' : 'text';
+  $('url').placeholder = c.placeholder; $('url').setAttribute('aria-label', c.label);
+  $('request').placeholder = c.ask;
+  if (!keepValue) $('url').value = store.get('where.' + t, '');
+  if ($('ideas')) $('ideas').hidden = t !== 'web'; // gone once a tweak has run
+  say(''); paintStatus(); sync(); checkProject();
+}
+// Say which mod was found, or why not, before anything is run.
+function checkProject() {
+  clearTimeout(projectTimer);
+  if ($('targetPick').value !== 'minecraft') return;
+  const dir = $('url').value.trim();
+  if (!dir) { say('Type the folder of your mod project.'); return; }
+  projectTimer = setTimeout(async () => {
+    try {
+      const r = await fetch('/api/project?dir=' + encodeURIComponent(dir));
+      const d = await r.json();
+      say(r.ok ? `Found ${esc(d.name)}: ${esc(d.loader)} ${esc(d.loaderVersion)} for Minecraft ${esc(d.minecraft)}.` : 'Tweak could not use that folder.<br>' + esc(d.error), !r.ok);
+    } catch (e) { say('Tweak could not look at that folder.<br>' + esc(e.message), true); }
+  }, 400);
+}
+$('targetPick').onchange = () => setTarget($('targetPick').value);
+$('url').addEventListener('input', checkProject);
+setTarget(store.get('target', 'web'));
 
 async function loadKept() {
   try {
@@ -419,7 +459,7 @@ function showTab(id) {
   $('pane').append(holder);
   if (typeof CodeMirror === 'undefined') { holder.innerHTML = '<p class="empty">The code editor could not load. It needs the internet the first time.</p>'; return; }
   const existing = editors[f.id];
-  const cm = CodeMirror(holder, { value: existing ? existing.cm.getValue() : f.value, mode: f.mode, lineNumbers: true, lineWrapping: true, tabSize: 2 });
+  const cm = CodeMirror(holder, { value: existing ? existing.cm.getValue() : f.value, mode: f.mode, lineNumbers: true, lineWrapping: true, tabSize: 2, readOnly: f.kind === 'file' });
   cm.setSize('100%', '100%');
   editors[f.id] = { cm, original: f.value };
   cm.on('change', () => {
@@ -432,11 +472,12 @@ function showTab(id) {
 
 /* ---------- running ---------- */
 $('go').onclick = async () => {
+  const target = $('targetPick').value;
   let url = $('url').value.trim();
-  if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
+  if (target === 'web' && !/^https?:\/\//i.test(url)) url = 'https://' + url;
   const request = $('request').value.trim(), model = $('model').value;
   say('');
-  const r = await fetch('/api/run', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ request, url, model, headless: !$('watch').checked }) });
+  const r = await fetch('/api/run', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ target, request, url, model, headless: !$('watch').checked }) });
   const d = await r.json();
   if (!r.ok) { say(esc(d.error), true); return; }
   startRun(d.runId, request, url, model);
@@ -475,7 +516,7 @@ function startRun(runId, request, url, model) {
     }
     if (e.type === 'attempt' && e.attempt.problem) {
       const miss = e.attempt.missing && e.attempt.missing.length ? ` It looked for ${e.attempt.missing.slice(0, 2).map(x => '"' + x + '"').join(', ')}, which is not on this page.` : '';
-      $('steps').insertAdjacentHTML('beforeend', `<li style="color:var(--faint);padding-left:14px">${esc(e.attempt.problem + miss)}</li>`);
+      $('steps').insertAdjacentHTML('beforeend', `<li style="color:var(--faint);padding-left:14px;white-space:pre-wrap">${esc(e.attempt.problem + miss)}</li>`);
     }
     if (e.type === 'done') {
       clearInterval(tick); src.close();
@@ -494,7 +535,7 @@ function showResult(r) {
   const proved = a && a.checks && a.checks.length;
   const cls = r.status === 'works' ? '' : r.status === 'unproven' ? ' warn' : ' bad';
   const rows = proved ? a.checks.map(c => {
-    const what = c.type === 'style' ? `${c.property} is ${c.value}` : c.type === 'hidden' ? `${c.selector} is hidden` : c.type === 'exists' ? `${c.selector} is there` : `${c.type} ${c.selector}`;
+    const what = c.type === 'style' ? `${c.property} is ${c.value}` : c.type === 'hidden' ? `${c.selector} is hidden` : c.type === 'exists' ? `${c.selector} is there` : c.type === 'builds' ? 'the mod builds' : c.type === 'inBuild' ? `the new ${c.selector} is in the build` : `${c.type} ${c.selector}`;
     return `<div>${esc(what)} <span style="color:var(--faint)">(was ${c.before ? 'true' : 'false'}, now ${c.after ? 'true' : 'false'})</span></div>`;
   }).join('') : `<div>${esc(r.reason)}</div>`;
 
@@ -503,6 +544,7 @@ function showResult(r) {
       <h3>${r.status === 'works' ? '<svg viewBox="0 0 24 24" fill="none" stroke="#7FB89C" stroke-width="2.4"><path d="M20 6L9 17l-5-5"/></svg>' : ''}${WORD[r.status] || r.status}</h3>
       <div class="rows">${rows}</div>
       ${a && a.checksFromCss ? '<div class="from">checks written from the css, not guessed</div>' : ''}
+      ${a && a.notTested && r.status === 'works' ? `<div class="from">${esc(a.notTested)}</div>` : ''}
     </div>
     <div class="acts" style="margin-top:12px">
       ${proved && r.status !== 'fail' ? '<button class="keep" id="keep" type="button">Keep it</button>' : ''}
@@ -513,7 +555,11 @@ function showResult(r) {
 
   // side panel and tabs
   const tabs = [];
-  if (r.id) {
+  if (r.target === 'minecraft') {
+    const list = a && a.files ? a.files.map(f => `<li><code>${esc(f.path)}</code></li>`).join('') : '';
+    tabs.push({ id: 'preview', label: 'summary', kind: 'shots', html: `<div class="empty"><div class="in"><p class="hint">${esc(r.reason)}</p>${list ? `<p class="hint">${r.status === 'works' ? 'Keep writes these files into ' + esc(r.project) : 'Files the last try changed, in a copy. Your project was not touched'}:</p><ul class="hint">${list}</ul>` : ''}</div></div>` });
+    (a && a.files || []).forEach((f, i) => tabs.push({ id: 'file' + i, label: f.path.split('/').pop(), kind: 'file', mode: 'text/x-java', value: f.content }));
+  } else if (r.id) {
     const after = proved ? `<figure><img alt="With the tweak" src="/shots/${esc(r.id)}/after-${n}.jpg"><figcaption>with the tweak</figcaption></figure>` : '<figure><figcaption>no tweak was tested</figcaption></figure>';
     tabs.push({ id: 'preview', label: 'preview', kind: 'shots', html: `<div class="shots"><figure><img alt="Before" src="/shots/${esc(r.id)}/before.jpg"><figcaption>before</figcaption></figure>${after}</div>` });
   }
@@ -530,7 +576,7 @@ function showResult(r) {
   $('stTest').innerHTML = r.status === 'works' ? '<span class="ok">test passed</span>' : r.status === 'unproven' ? '<span style="color:var(--warn)">not proven</span>' : '<span class="err">test failed</span>';
 
   const runId = run ? run.runId : null, url = run ? run.url : '', request = run ? run.request : '';
-  if ($('keep')) $('keep').onclick = () => keepIt(runId, n, a.name);
+  if ($('keep')) $('keep').onclick = () => keepIt(runId, n, a.name, r.target);
   $('again').onclick = () => { $('url').value = url; $('request').value = request; sync(); $('go').click(); };
   $('fresh').onclick = reset;
 
@@ -549,12 +595,13 @@ function showResult(r) {
   $('revert').onclick = () => { Object.values(editors).forEach(e => e.cm.setValue(e.original)); $('tabs').querySelectorAll('.tab').forEach(t => t.classList.remove('edited')); $('revert').disabled = true; $('edMsg').textContent = 'Back to the version the model wrote.'; };
 }
 
-async function keepIt(runId, attempt, name) {
+async function keepIt(runId, attempt, name, target) {
   $('keep').disabled = true;
   const res = await fetch('/api/keep', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ runId, attempt, name }) });
   const d = await res.json();
   if (!res.ok) { $('keptInfo').innerHTML = `<div class="kept" style="color:var(--bad)">${esc(d.error)}</div>`; $('keep').disabled = false; return; }
   $('keep').textContent = 'Kept';
+  if (target === 'minecraft') { $('keptInfo').innerHTML = `<div class="kept">Written into <code>${esc(d.folder)}</code>:<ol>${d.files.map(f => `<li><code>${esc(f)}</code></li>`).join('')}</ol>The old versions are saved in the run folder. Run the game from your project to try it.</div>`; return; }
   $('keptInfo').innerHTML = `<div class="kept">Saved to <code>${esc(d.folder)}</code><ol><li>Open <code>chrome://extensions</code> in Chrome.</li><li>Turn on Developer mode.</li><li>Load unpacked, choose that folder.</li></ol></div>`;
   loadKept();
 }
