@@ -33,5 +33,9 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/')
         with:
-          files: dist/*.exe
+          # latest.yml is what the app's updater reads to find a new version
+          files: |
+            dist/*.exe
+            dist/*.exe.blockmap
+            dist/latest.yml
           fail_on_unmatched_files: false
