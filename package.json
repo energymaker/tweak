@@ -1,6 +1,6 @@
 {
   "name": "tweak",
-  "version": "1.6.0",
+  "version": "1.6.1",
   "description": "Change the websites you use by describing it. Open models on your own computer write the change, a real browser tests it, you decide whether to keep it.",
   "main": "main.cjs",
   "type": "module",
@@ -63,7 +63,7 @@
     "publish": [
       {
         "provider": "github",
-        "owner": "energymarker",
+        "owner": "energymaker",
         "repo": "tweak"
       }
     ]

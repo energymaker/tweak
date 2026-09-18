@@ -1,6 +1,7 @@
-# Builds the installer and publishes it, so nobody has to build anything.
-# Push a tag like v1.6.0 and this does the rest.
-name: Build and publish
+# Builds the Windows installer on every tag and keeps it as a run artifact, so
+# you never build locally. Attaching it to a release is a separate step that is
+# allowed to fail without failing the build.
+name: Build installer
 
 on:
   push:
@@ -19,6 +20,18 @@ jobs:
         with:
           node-version: 20
       - run: npm install
-      - run: npm run dist
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build
+        run: npx electron-builder --win --publish never
+      - name: Keep the installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: Tweak-installer
+          path: dist/*.exe
+          if-no-files-found: error
+      - name: Attach it to a release
+        continue-on-error: true
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: dist/*.exe
+          fail_on_unmatched_files: false
