@@ -121,6 +121,23 @@ test('each check is logged with its origin, and whether the verdict relied on a 
   assert.equal(css.log.attempts[0].reliedOnModelChecks, false);
 });
 
+test('allRounds runs and logs every round after a pass, and remember: false saves nothing', async () => {
+  const { KNOWN } = await import(new URL('pipeline.js', lib).href);
+  const known = () => { try { return fs.readFileSync(KNOWN, 'utf8'); } catch { return ''; } };
+  script = ['good', 'bad', 'bad', 'bad', 'bad', 'good']; calls = [];
+  const result = await runTweak({ request: 'bench only request', url: 'https://example.com/', model: 'ollama:small', attempts: 2, allRounds: true, remember: false });
+  assert.equal(calls.length, 6);
+  assert.equal(result.status, 'works');
+  assert.equal(result.best, 1, 'the winner is still the first pass, not the last');
+  assert.deepEqual(lastLog().attempts.map(a => [a.round, a.sample, a.verdict]), [[1, 1, 'works'], [1, 2, 'fail'], [2, 1, 'fail'], [2, 2, 'fail'], [3, 1, 'fail'], [3, 2, 'works']]);
+  assert.doesNotMatch(known(), /bench only request/);
+
+  // Control: the same replies without allRounds stop after round 1 and are remembered.
+  const normal = await run(['good', 'bad'], { request: 'app request', attempts: 2 });
+  assert.equal(normal.calls.length, 2);
+  assert.match(known(), /app request/);
+});
+
 test('escalate: false never calls the bigger model', async () => {
   const { calls } = await run(['bad', 'bad', 'bad'], { fallback: 'api:big', escalate: false });
   assert.deepEqual(calls.map(c => c.model), ['ollama:small', 'ollama:small', 'ollama:small']);

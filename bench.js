@@ -7,7 +7,9 @@
 //
 // Options: --tasks N, --timeout SECONDS (per task, default 300), --tasks-file path,
 // --attempts N (1 to 5 samples per round, at temperatures 0.2 x k, default 1),
-// --no-escalate (never hand over to the bigger model, for local-only numbers)
+// --no-escalate (never hand over to the bigger model, for local-only numbers),
+// --all-rounds (run every round even after a pass, and learn nothing between
+// tasks, so smaller N can be simulated from the log afterwards)
 
 import fs from 'node:fs/promises';
 import { HOME, runTweak } from './lib/pipeline.js';
@@ -25,6 +27,8 @@ const attempts = Number(opt('attempts', 1));
 if (!Number.isInteger(attempts) || attempts < 1 || attempts > 5) { console.error('--attempts must be a whole number from 1 to 5.'); process.exit(1); }
 const escalate = !args.includes('--no-escalate');
 if (!escalate) args.splice(args.indexOf('--no-escalate'), 1);
+const allRounds = args.includes('--all-rounds');
+if (allRounds) args.splice(args.indexOf('--all-rounds'), 1);
 const models = args.filter(a => !a.startsWith('--') && /^(ollama|api):/.test(a));
 
 const found = await listModels();
@@ -64,7 +68,7 @@ function runOne(task, model) {
   const beat = setInterval(() => process.stdout.write(`      ${Math.round((Date.now() - started) / 1000)}s  still on: ${lastStep}\n`), 20000);
   const ctl = new AbortController();
   const killer = setTimeout(() => ctl.abort(), taskTimeout);
-  return runTweak({ ...task, model, fallback, attempts, escalate, headless: true, signal: ctl.signal, onEvent: e => {
+  return runTweak({ ...task, model, fallback, attempts, escalate, allRounds, remember: !allRounds, headless: true, signal: ctl.signal, onEvent: e => {
     if (e.type === 'step') { lastStep = e.label; process.stdout.write(`      ${Math.round(e.at / 1000)}s  ${e.label}\n`); }
     if (e.type === 'attempt' && e.attempt.problem) process.stdout.write(`           ${String(e.attempt.problem).slice(0, 120)}\n`);
   } })
@@ -77,6 +81,7 @@ console.log(`\n  ${useModels.length} model(s), ${tasks.length} task(s). Up to ${
 console.log(`  Results are saved after every task to ${mdFile}`);
 if (attempts > 1) console.log(`  ${attempts} samples per round, at temperatures ${Array.from({ length: attempts }, (_, i) => Math.round((i + 1) * 2) / 10).join(', ')}. Every one is logged in runs.jsonl.`);
 if (!escalate) console.log('  Escalation is off: only the model on this computer tries.');
+if (allRounds) console.log('  Every round runs even after a pass, and nothing is saved to what-worked.json.');
 else if (fallback) console.log(`  If the small model fails twice, ${fallback} takes over.`);
 console.log('  The app must be stopped (Ctrl C in the npm start window): both use the same test browser.\n');
 
