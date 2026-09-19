@@ -28,7 +28,7 @@ mock.module(new URL('model.js', lib).href, { exports: {
   listModels: async () => [], parseJSON: JSON.parse
 } });
 mock.module(new URL('browser.js', lib).href, { exports: Object.fromEntries(
-  ['VIEWPORT', 'launchTestBrowser', 'goto', 'outline', 'runChecks', 'tweakError', 'consentWall', 'freshProfile', 'dropProfile', 'loadCookies', 'saveCookies', 'isResponsive'].map(k => [k, () => {}])
+  ['VIEWPORT', 'launchTestBrowser', 'goto', 'outline', 'runChecks', 'tweakError', 'pageWall', 'wallDuringLoad', 'freshProfile', 'dropProfile', 'loadCookies', 'saveCookies', 'isResponsive'].map(k => [k, () => {}])
 ) });
 const real = await import(new URL('targets/minecraft.js', lib).href);
 mock.module(new URL('targets/minecraft.js', lib).href, { exports: {

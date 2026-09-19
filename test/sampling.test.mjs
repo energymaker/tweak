@@ -11,6 +11,9 @@ import path from 'node:path';
 process.env.TWEAK_HOME = fs.mkdtempSync(path.join(os.tmpdir(), 'tweak-sampling-'));
 after(() => fs.rmSync(process.env.TWEAK_HOME, { recursive: true, force: true }));
 const lib = new URL('../lib/', import.meta.url);
+const { wallFor } = await import(new URL('walls.js', lib).href);
+// Where the fake "before" page ends up, and its HTTP status. Each run resets it.
+let landing = {};
 
 // What the model writes. GOOD marks a change the fake page will honour.
 const GEN = {
@@ -51,14 +54,17 @@ const check = (c, ok) => {
 mock.module(new URL('browser.js', lib).href, { exports: {
   VIEWPORT: {}, launchTestBrowser: async inject => fakeContext(inject), goto: async () => {}, outline: async () => 'outline',
   runChecks: async (page, checks) => checks.map(c => check(c, works(page.ctx.inject))),
-  tweakError: async () => '', consentWall: async () => '', freshProfile: () => {}, dropProfile: () => {},
+  tweakError: async () => '',
+  // The real wall rules, applied to where the fake page landed.
+  pageWall: async (_page, requested) => wallFor({ requested, final: landing.final || requested, status: landing.status ?? 200 }),
+  wallDuringLoad: () => null, freshProfile: () => {}, dropProfile: () => {},
   loadCookies: async () => {}, saveCookies: async () => {}, isResponsive: async () => true, sweepProfiles: async () => {}
 } });
 
 const { runTweak, LOG } = await import(new URL('pipeline.js', lib).href);
 const lastLog = () => JSON.parse(fs.readFileSync(LOG, 'utf8').trim().split('\n').pop());
-async function run(replies, opts = {}) {
-  script = replies; calls = [];
+async function run(replies, opts = {}, land = {}) {
+  script = replies; calls = []; landing = land;
   const result = await runTweak({ request: 'hide the ad', url: 'https://example.com/', model: 'ollama:small', ...opts });
   return { result, calls, log: lastLog() };
 }
@@ -144,4 +150,19 @@ test('escalate: false never calls the bigger model', async () => {
   // Control: with escalation on (the default), try 3 goes to the bigger model.
   const on = await run(['bad', 'bad', 'bad', 'bad'], { fallback: 'api:big' });
   assert.equal(on.calls[2].model, 'api:big');
+});
+
+test('a walled page is neither a pass nor a fail, and the model is never asked', async () => {
+  const blocked = await run([], {}, { status: 429 });
+  assert.equal(blocked.result.status, 'walled');
+  assert.equal(blocked.calls.length, 0);
+  assert.deepEqual([blocked.log.status, blocked.log.wall.kind, blocked.log.modelCalls], ['walled', 'blocked', 0]);
+  assert.match(blocked.result.reason, /HTTP 429/);
+
+  const moved = await run([], {}, { final: 'https://elsewhere.org/page' });
+  assert.deepEqual([moved.result.status, moved.result.wall.kind, moved.result.wall.finalUrl], ['walled', 'moved', 'https://elsewhere.org/page']);
+
+  // Control: the same page landing where it was asked, with a 200, runs as normal.
+  const normal = await run(['good'], {}, { status: 200 });
+  assert.equal(normal.result.status, 'works');
 });

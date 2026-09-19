@@ -48,7 +48,8 @@ if (limit > 0) tasks = tasks.slice(0, limit);
 const stamp = new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-');
 const mdFile = `bench-results-${stamp}.md`;
 const jsonFile = `bench-results-${stamp}.jsonl`;
-const label = { works: 'Works', unproven: 'Not proven', fail: "Didn't work", stopped: 'Stopped' };
+// A walled task never reached the real page, so it is neither a pass nor a fail.
+const label = { works: 'Works', unproven: 'Not proven', fail: "Didn't work", stopped: 'Stopped', walled: 'Not measured (wall)' };
 const rows = [];
 const fullRuns = []; // with every attempt, for the --all-rounds table
 
@@ -65,7 +66,7 @@ function save() {
     }
     const works = mine.filter(r => r.status === 'works').length;
     const first = mine.filter(r => r.status === 'works' && r.tries === 1).length;
-    md += `## ${model}\n\nWorked: ${works} of ${mine.length} (first ${attempts > 1 ? 'round' : 'try'}: ${first}). Not proven: ${mine.filter(r => r.status === 'unproven').length}. Stopped: ${mine.filter(r => r.status === 'stopped').length}.\n\n`;
+    md += `## ${model}\n\nWorked: ${works} of ${mine.length} (first ${attempts > 1 ? 'round' : 'try'}: ${first}). Not proven: ${mine.filter(r => r.status === 'unproven').length}. Not measured (the page was a wall): ${mine.filter(r => r.status === 'walled').length}. Stopped: ${mine.filter(r => r.status === 'stopped').length}.\n\n`;
     md += `| Task | Site | Result | ${attempts > 1 ? 'Rounds' : 'Tries'} | Seconds | Notes |\n|---|---|---|---|---|---|\n`;
     md += mine.map(r => `| ${r.request} | ${r.host} | ${label[r.status] || r.status}${r.finishedBy ? ' (by ' + r.finishedBy.replace(/^(ollama|api):/, '') + ')' : ''} | ${r.tries} | ${r.seconds} | ${String(r.reason).replace(/\|/g, '/').slice(0, 160)} |`).join('\n') + '\n\n';
   }

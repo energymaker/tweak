@@ -539,16 +539,18 @@ function startRun(runId, request, url, model) {
   };
 }
 
-const WORD = { works: 'It worked', unproven: 'Not proven', fail: "It didn't work", stopped: 'Stopped' };
+const WORD = { works: 'It worked', unproven: 'Not proven', fail: "It didn't work", stopped: 'Stopped', walled: 'Could not test this page' };
 function showResult(r) {
   const n = r.best || (r.attempts.length ? r.attempts[r.attempts.length - 1].n : 0);
   const a = r.attempts.find(x => x.n === n);
   const proved = a && a.checks && a.checks.length;
-  const cls = r.status === 'works' ? '' : r.status === 'unproven' ? ' warn' : ' bad';
+  const cls = r.status === 'works' ? '' : r.status === 'unproven' || r.status === 'walled' ? ' warn' : ' bad';
+  // Only a page that moved to another site can be used instead; other walls just stop.
+  const moved = r.status === 'walled' && r.wall && r.wall.kind === 'moved' ? r.wall.finalUrl : '';
   const rows = proved ? a.checks.map(c => {
     const what = c.type === 'style' ? `${c.property} is ${c.value}` : c.type === 'hidden' ? `${c.selector} is hidden` : c.type === 'exists' ? `${c.selector} is there` : c.type === 'builds' ? 'the mod builds' : c.type === 'inBuild' ? `the new ${c.selector} is in the build` : `${c.type} ${c.selector}`;
     return `<div>${esc(what)} <span style="color:var(--faint)">(was ${c.before ? 'true' : 'false'}, now ${c.after ? 'true' : 'false'})</span></div>`;
-  }).join('') : `<div>${esc(r.reason)}</div>`;
+  }).join('') : `<div>${esc(r.reason)}</div>` + (moved ? `<div>It ended up at <code>${esc(moved)}</code></div>` : '');
 
   $('result').innerHTML = `
     <div class="proof${cls}">
@@ -559,6 +561,7 @@ function showResult(r) {
     </div>
     <div class="acts" style="margin-top:12px">
       ${proved && r.status !== 'fail' ? '<button class="keep" id="keep" type="button">Keep it</button>' : ''}
+      ${moved ? '<button class="keep" id="useMoved" type="button">Use this page instead</button>' : ''}
       <button class="ghost" id="again" type="button">Try again</button>
       <button class="link" id="fresh" type="button">New tweak</button>
     </div>
@@ -584,11 +587,12 @@ function showResult(r) {
     $('fileList').querySelectorAll('.sitem').forEach(x => x.classList.toggle('on', x === b));
     showTab(b.dataset.id);
   });
-  $('stTest').innerHTML = r.status === 'works' ? '<span class="ok">test passed</span>' : r.status === 'unproven' ? '<span style="color:var(--warn)">not proven</span>' : '<span class="err">test failed</span>';
+  $('stTest').innerHTML = r.status === 'works' ? '<span class="ok">test passed</span>' : r.status === 'unproven' ? '<span style="color:var(--warn)">not proven</span>' : r.status === 'walled' ? '<span style="color:var(--warn)">not tested</span>' : '<span class="err">test failed</span>';
 
   const runId = run ? run.runId : null, url = run ? run.url : '', request = run ? run.request : '';
   if ($('keep')) $('keep').onclick = () => keepIt(runId, n, a.name, r.target);
   $('again').onclick = () => { $('url').value = url; $('request').value = request; sync(); $('go').click(); };
+  if ($('useMoved')) $('useMoved').onclick = () => { $('url').value = moved; $('request').value = request; sync(); $('go').click(); };
   $('fresh').onclick = reset;
 
   $('retest').onclick = async () => {
