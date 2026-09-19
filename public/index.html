@@ -265,6 +265,7 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
     <input id="ollamaHost" type="text" placeholder="http://127.0.0.1:11434" spellcheck="false">
     <div class="acts" style="margin-top:6px"><button class="keep" id="saveSet" type="button">Save</button><span class="hint" id="setMsg"></span></div>
     <p class="hint" id="homeLine"></p>
+    <div class="acts"><button class="link" id="openLogs" type="button">Open logs folder</button><span class="hint" id="logsMsg"></span></div>
   </div></dialog>
 
 <dialog id="tweaksDlg"><div class="dh"><h2>Your tweaks</h2><button class="link" id="closeTweaks" type="button">Close</button></div>
@@ -414,6 +415,14 @@ $('railSettings').onclick = async () => {
   $('setDlg').showModal();
 };
 $('closeSet').onclick = () => $('setDlg').close();
+$('openLogs').onclick = async () => {
+  $('logsMsg').textContent = '';
+  try {
+    const r = await fetch('/api/open-logs', { method: 'POST' });
+    const d = await r.json();
+    if (!r.ok) $('logsMsg').textContent = 'Could not open ' + d.dir + ': ' + d.error;
+  } catch (e) { $('logsMsg').textContent = 'Could not open the logs folder: ' + e.message; }
+};
 $('saveSet').onclick = async () => {
   const body = { fallbackModel: $('fallbackModel').value, ollamaHost: $('ollamaHost').value };
   if ($('hfToken').value.trim()) body.hfToken = $('hfToken').value.trim();

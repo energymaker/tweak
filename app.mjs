@@ -5,6 +5,7 @@ const { autoUpdater } = pkg;
 import path from 'node:path';
 import fs from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
+import { appendCapped } from './lib/log.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
@@ -93,8 +94,13 @@ async function checkForUpdates() {
     });
     if (response === 0) autoUpdater.quitAndInstall();
   });
-  autoUpdater.on('error', () => {}); // never nag about a failed check
-  try { await autoUpdater.checkForUpdates(); } catch {}
+  // Never nag about a failed check, but keep it in logs\updater.log (Settings,
+  // Open logs folder). Every check and download failure arrives here.
+  autoUpdater.on('error', e => {
+    const line = `${new Date().toISOString()} v${app.getVersion()} ${e && e.stack || e}\n`;
+    appendCapped(path.join(app.getPath('logs'), 'updater.log'), line).catch(() => {}); // nowhere left to report it
+  });
+  try { await autoUpdater.checkForUpdates(); } catch {} // already logged by the error event
 }
 
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });

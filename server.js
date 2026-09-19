@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { listModels } from './lib/model.js';
 import { runTweak, testCode, planTweak, keepPlanned, keepProject, HOME, PROFILE, COOKIES, RUNS, LOG } from './lib/pipeline.js';
 import { detect } from './lib/targets/minecraft.js';
-import { shell } from 'electron';
+import { app, shell } from 'electron';
 import { launchTestBrowser, goto, loadCookies, saveCookies, sweepProfiles } from './lib/browser.js';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
@@ -181,6 +181,13 @@ const server = http.createServer(async (req, res) => {
       if (!/^https:\/\/(ollama\.com|huggingface\.co)\//.test(String(target))) return send(res, 400, { error: 'That link is not allowed.' });
       shell.openExternal(target);
       return send(res, 200, { ok: true });
+    }
+
+    if (req.method === 'POST' && url.pathname === '/api/open-logs') {
+      const dir = app.getPath('logs');
+      await fs.mkdir(dir, { recursive: true });
+      const error = await shell.openPath(dir);
+      return send(res, error ? 500 : 200, error ? { error, dir } : { ok: true, dir });
     }
 
     if (req.method === 'POST' && url.pathname === '/api/pull') {
