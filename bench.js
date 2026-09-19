@@ -15,6 +15,7 @@ import fs from 'node:fs/promises';
 import { HOME, runTweak } from './lib/pipeline.js';
 import { listModels } from './lib/model.js';
 import { sweepProfiles } from './lib/browser.js';
+import { forcedSection } from './analyse-sampling.mjs';
 await sweepProfiles();
 
 const args = process.argv.slice(2);
@@ -29,6 +30,8 @@ const escalate = !args.includes('--no-escalate');
 if (!escalate) args.splice(args.indexOf('--no-escalate'), 1);
 const allRounds = args.includes('--all-rounds');
 if (allRounds) args.splice(args.indexOf('--all-rounds'), 1);
+// The N=1/3/5 table assumes every round is the local model's; round 3 would be the bigger one's.
+if (allRounds && escalate) { console.error('--all-rounds needs --no-escalate.'); process.exit(1); }
 const models = args.filter(a => !a.startsWith('--') && /^(ollama|api):/.test(a));
 
 const found = await listModels();
@@ -47,12 +50,19 @@ const mdFile = `bench-results-${stamp}.md`;
 const jsonFile = `bench-results-${stamp}.jsonl`;
 const label = { works: 'Works', unproven: 'Not proven', fail: "Didn't work", stopped: 'Stopped' };
 const rows = [];
+const fullRuns = []; // with every attempt, for the --all-rounds table
 
 function save() {
   let md = `# Bench results\n\nStarted ${new Date().toLocaleString('en-GB')}. Every result below was measured by testing the tweak in a real browser.\n\n`;
   for (const model of useModels) {
     const mine = rows.filter(r => r.model === model);
     if (!mine.length) continue;
+    // Under --all-rounds every run's rounds, tries and time were forced, so only
+    // the simulated N=1/3/5 outcome means anything.
+    if (allRounds) {
+      md += forcedSection(model, attempts, fullRuns.filter(r => r.model === model));
+      continue;
+    }
     const works = mine.filter(r => r.status === 'works').length;
     const first = mine.filter(r => r.status === 'works' && r.tries === 1).length;
     md += `## ${model}\n\nWorked: ${works} of ${mine.length} (first ${attempts > 1 ? 'round' : 'try'}: ${first}). Not proven: ${mine.filter(r => r.status === 'unproven').length}. Stopped: ${mine.filter(r => r.status === 'stopped').length}.\n\n`;
@@ -72,7 +82,7 @@ function runOne(task, model) {
     if (e.type === 'step') { lastStep = e.label; process.stdout.write(`      ${Math.round(e.at / 1000)}s  ${e.label}\n`); }
     if (e.type === 'attempt' && e.attempt.problem) process.stdout.write(`           ${String(e.attempt.problem).slice(0, 120)}\n`);
   } })
-    .then(r => ({ status: r.status, reason: r.reason, seconds: r.seconds, tries: attempts > 1 ? (r.attempts.at(-1)?.round ?? 0) : r.attempts.length, model: r.model, escalated: r.model !== r.firstModel }))
+    .then(r => ({ attempts: r.attempts, status: r.status, reason: r.reason, seconds: r.seconds, tries: attempts > 1 ? (r.attempts.at(-1)?.round ?? 0) : r.attempts.length, model: r.model, escalated: r.model !== r.firstModel }))
     .catch(e => ({ status: 'fail', reason: 'The tool itself broke: ' + e.message, seconds: 0, tries: 0 }))
     .finally(() => { clearInterval(beat); clearTimeout(killer); });
 }
@@ -94,6 +104,7 @@ for (const model of useModels) {
     if (r.status !== 'works') console.log(`         ${String(r.reason).slice(0, 150)}`);
     if (/consent/i.test(String(r.reason))) console.log(`         Fix it once: stop this, run "npm start", click "Open test browser" with ${host} in the box, accept the cookie page, close that window, stop the app, run the bench again.`);
     console.log('');
+    fullRuns.push({ model, request: t.request, attempts: r.attempts || [] });
     rows.push({ model, request: t.request, url: t.url, host, status: r.status, tries: r.tries, seconds: r.seconds, reason: r.reason, finishedBy: r.escalated ? r.model : '' });
     await fs.appendFile(jsonFile, JSON.stringify(rows[rows.length - 1]) + '\n');
     await save();
