@@ -43,8 +43,10 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const file = process.argv[2];
   if (!file) { console.error('Give the runs.jsonl to read: node analyse-sampling.mjs path/to/runs.jsonl'); process.exit(1); }
   const runs = fs.readFileSync(file, 'utf8').split(/\r?\n/).filter(Boolean).map(l => JSON.parse(l))
-    .filter(r => r.kind === 'run' && r.attempts && r.attempts.length && r.attempts.every(a => a.sample));
-  const maxSample = Math.max(...runs.flatMap(r => r.attempts.map(a => a.sample)));
+    
+    // A run that never reached the model (the page would not load) stays in, as incomplete.
+    .filter(r => r.kind === 'run' && Array.isArray(r.attempts) && r.attempts.every(a => a.sample));
+  const maxSample = Math.max(0, ...runs.flatMap(r => r.attempts.map(a => a.sample)));
   console.log(`${runs.length} runs, up to ${maxSample} samples per round, from ${file}\n`);
   const rows = [1, 3, 5].filter(n => n <= maxSample).map(n => summarise(runs, n));
   console.log('| N | Passed | Not proven | Incomplete | Model calls | Calls per task | Passes relying on a model-written check |');

@@ -23,6 +23,7 @@ test('no pass is a fail, or not proven if a check only passed without proving an
 test('a missing attempt makes the task incomplete instead of a guess', () => {
   assert.equal(simulate(run([[F, F, F], [F]]), 3).status, 'incomplete');
   assert.equal(simulate(run([[F, F, F], [F, F, F]]), 3).status, 'incomplete', 'a run cut short after 2 rounds is not a fail');
+  assert.equal(simulate({ request: 'page never loaded', attempts: [] }, 1).status, 'incomplete');
   // but a pass found before the gap still counts
   assert.equal(simulate(run([[F, W, F], [F]]), 3).status, 'works');
 });
