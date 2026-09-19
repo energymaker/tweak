@@ -5,7 +5,9 @@
 //   npm run bench -- ollama:qwen3:8b           one model
 //   npm run bench -- --tasks 3 ollama:qwen3:8b just the first 3 tasks
 //
-// Options: --tasks N, --timeout SECONDS (per task, default 300), --tasks-file path
+// Options: --tasks N, --timeout SECONDS (per task, default 300), --tasks-file path,
+// --attempts N (1 to 5 samples per round, at temperatures 0.2 x k, default 1),
+// --no-escalate (never hand over to the bigger model, for local-only numbers)
 
 import fs from 'node:fs/promises';
 import { HOME, runTweak } from './lib/pipeline.js';
@@ -19,6 +21,10 @@ const limit = Number(opt('tasks', 0));
 const taskTimeout = Number(opt('timeout', 300)) * 1000;
 const tasksFile = opt('tasks-file', process.env.TWEAK_TASKS || 'bench/tasks.json');
 const fallback = opt('fallback', process.env.TWEAK_FALLBACK_MODEL || '');
+const attempts = Number(opt('attempts', 1));
+if (!Number.isInteger(attempts) || attempts < 1 || attempts > 5) { console.error('--attempts must be a whole number from 1 to 5.'); process.exit(1); }
+const escalate = !args.includes('--no-escalate');
+if (!escalate) args.splice(args.indexOf('--no-escalate'), 1);
 const models = args.filter(a => !a.startsWith('--') && /^(ollama|api):/.test(a));
 
 const found = await listModels();
@@ -45,8 +51,8 @@ function save() {
     if (!mine.length) continue;
     const works = mine.filter(r => r.status === 'works').length;
     const first = mine.filter(r => r.status === 'works' && r.tries === 1).length;
-    md += `## ${model}\n\nWorked: ${works} of ${mine.length} (first try: ${first}). Not proven: ${mine.filter(r => r.status === 'unproven').length}. Stopped: ${mine.filter(r => r.status === 'stopped').length}.\n\n`;
-    md += `| Task | Site | Result | Tries | Seconds | Notes |\n|---|---|---|---|---|---|\n`;
+    md += `## ${model}\n\nWorked: ${works} of ${mine.length} (first ${attempts > 1 ? 'round' : 'try'}: ${first}). Not proven: ${mine.filter(r => r.status === 'unproven').length}. Stopped: ${mine.filter(r => r.status === 'stopped').length}.\n\n`;
+    md += `| Task | Site | Result | ${attempts > 1 ? 'Rounds' : 'Tries'} | Seconds | Notes |\n|---|---|---|---|---|---|\n`;
     md += mine.map(r => `| ${r.request} | ${r.host} | ${label[r.status] || r.status}${r.finishedBy ? ' (by ' + r.finishedBy.replace(/^(ollama|api):/, '') + ')' : ''} | ${r.tries} | ${r.seconds} | ${String(r.reason).replace(/\|/g, '/').slice(0, 160)} |`).join('\n') + '\n\n';
   }
   return fs.writeFile(mdFile, md);
@@ -58,18 +64,20 @@ function runOne(task, model) {
   const beat = setInterval(() => process.stdout.write(`      ${Math.round((Date.now() - started) / 1000)}s  still on: ${lastStep}\n`), 20000);
   const ctl = new AbortController();
   const killer = setTimeout(() => ctl.abort(), taskTimeout);
-  return runTweak({ ...task, model, fallback, headless: true, signal: ctl.signal, onEvent: e => {
+  return runTweak({ ...task, model, fallback, attempts, escalate, headless: true, signal: ctl.signal, onEvent: e => {
     if (e.type === 'step') { lastStep = e.label; process.stdout.write(`      ${Math.round(e.at / 1000)}s  ${e.label}\n`); }
     if (e.type === 'attempt' && e.attempt.problem) process.stdout.write(`           ${String(e.attempt.problem).slice(0, 120)}\n`);
   } })
-    .then(r => ({ status: r.status, reason: r.reason, seconds: r.seconds, tries: r.attempts.length, model: r.model, escalated: r.model !== r.firstModel }))
+    .then(r => ({ status: r.status, reason: r.reason, seconds: r.seconds, tries: attempts > 1 ? (r.attempts.at(-1)?.round ?? 0) : r.attempts.length, model: r.model, escalated: r.model !== r.firstModel }))
     .catch(e => ({ status: 'fail', reason: 'The tool itself broke: ' + e.message, seconds: 0, tries: 0 }))
     .finally(() => { clearInterval(beat); clearTimeout(killer); });
 }
 
 console.log(`\n  ${useModels.length} model(s), ${tasks.length} task(s). Up to ${taskTimeout / 1000}s per task.`);
 console.log(`  Results are saved after every task to ${mdFile}`);
-if (fallback) console.log(`  If the small model fails twice, ${fallback} takes over.`);
+if (attempts > 1) console.log(`  ${attempts} samples per round, at temperatures ${Array.from({ length: attempts }, (_, i) => Math.round((i + 1) * 2) / 10).join(', ')}. Every one is logged in runs.jsonl.`);
+if (!escalate) console.log('  Escalation is off: only the model on this computer tries.');
+else if (fallback) console.log(`  If the small model fails twice, ${fallback} takes over.`);
 console.log('  The app must be stopped (Ctrl C in the npm start window): both use the same test browser.\n');
 
 for (const model of useModels) {
