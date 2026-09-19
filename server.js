@@ -1,6 +1,6 @@
 import http from 'node:http';
 import fs from 'node:fs/promises';
-import { createReadStream, existsSync } from 'node:fs';
+import { createReadStream, existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { listModels } from './lib/model.js';
@@ -13,6 +13,7 @@ const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const TWEAKS = path.resolve(process.env.TWEAK_KEEP_DIR || path.join(HOME, 'tweaks'));
 const PORT = Number(process.env.PORT || 4317);
 const SETTINGS = path.join(HOME, 'settings.json');
+const VERSION = JSON.parse(readFileSync(path.join(ROOT, 'package.json'), 'utf8')).version;
 
 const runs = new Map(); // id -> { events, listeners, controller, result }
 const RECOMMENDED = 'qwen2.5-coder:7b';
@@ -94,7 +95,7 @@ const server = http.createServer(async (req, res) => {
 
     if (req.method === 'GET' && url.pathname === '/api/status') {
       const models = await listModels();
-      return send(res, 200, { models, browserReady: await chromiumInstalled(), busy, testBrowserOpen: testBrowserIsOpen(), keepDir: TWEAKS, fallback: process.env.TWEAK_FALLBACK_MODEL || '' });
+      return send(res, 200, { models, browserReady: await chromiumInstalled(), busy, testBrowserOpen: testBrowserIsOpen(), keepDir: TWEAKS, fallback: process.env.TWEAK_FALLBACK_MODEL || '', version: VERSION });
     }
 
     if (req.method === 'POST' && url.pathname === '/api/run') {

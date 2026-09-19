@@ -240,6 +240,7 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
 
 <div class="status">
   <span class="item" id="stModel"><span class="dot"></span>no model</span>
+  <span class="item" id="stVersion"></span>
   <span class="item" id="stTarget"></span>
   <span class="item" id="stTest"></span>
   <div class="grow"></div>
@@ -346,7 +347,8 @@ function paintStatus() {
   const m = $('model').value;
   const local = m.startsWith('ollama:');
   $('stModel').innerHTML = m ? `<span class="dot" style="background:${local ? 'var(--good)' : 'var(--warn)'}"></span>${esc(m.replace(/^(ollama|api):/, ''))}, ${local ? 'on this computer' : 'online'}` : '<span class="dot" style="background:var(--dim)"></span>no model';
-  $('modelPick').textContent = m ? m.replace(/^(ollama|api):/, '') : 'choose a model';
+  $('stVersion').textContent = status && status.version ? 'v' + status.version : '';
+  $('modelPick').textContent = m ?m.replace(/^(ollama|api):/, '') : 'choose a model';
   const u = $('url').value.trim();
   $('stTarget').textContent = !u ? '' : $('targetPick').value === 'web' ? u.replace(/^https?:\/\//, '').split('/')[0] : u.split(/[\\/]/).filter(Boolean).pop();
   $('stExtra').textContent = status && status.keepDir ? 'kept in ' + status.keepDir : '';
